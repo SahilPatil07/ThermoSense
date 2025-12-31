@@ -1,0 +1,86 @@
+{
+    "T_EMD_In_Tot": [
+        "T1",
+        "T_EMD_In",
+        "EMD_Inlet",
+        "Temp_EMD_In",
+        "EMD In"
+    ],
+    "T_AfterChillerByPass": [
+        "T2",
+        "AfterChiller",
+        "Chiller_Bypass",
+        "After Chiller"
+    ],
+    "T_EssHeater_Out": [
+        "T3",
+        "EssHeater",
+        "Heater_Out",
+        "Heater Out"
+    ],
+    "T_EVAC_In": [
+        "T5",
+        "EVAC_In",
+        "Evac_Inlet",
+        "EVAC In"
+    ],
+    "T_ChillerBypass": [
+        "T7",
+        "Chiller_Bypass_Temp",
+        "Chiller Bypass"
+    ],
+    "T_ClntRadOut": [
+        "T20",
+        "Rad_Out",
+        "Radiator_Out",
+        "Rad Out"
+    ],
+    "T_ClntRad_In": [
+        "Rad_In",
+        "Radiator_In",
+        "Rad In"
+    ],
+    "Flw_EMD_Tot": [
+        "F1",
+        "Flow_EMD",
+        "EMD_Flow",
+        "EMD Flow"
+    ],
+    "Flw_AfterChillerByPass": [
+        "F2",
+        "Flow_Chiller_Bypass",
+        "Chiller Bypass Flow"
+    ],
+    "Flw_AfterEssHeater": [
+        "F3",
+        "Flow_Heater",
+        "Heater Flow"
+    ],
+    "Flw_AirCompressor_Out": [
+        "F6",
+        "Flow_Compressor",
+        "Compressor Flow"
+    ],
+    "P_EMD_In_Tot": [
+        "P1",
+        "Pressure_EMD_In",
+        "EMD Pressure"
+    ],
+    "P_AfterChillerByPass": [
+        "P2",
+        "Pressure_Chiller_Bypass",
+        "Chiller Bypass Pressure"
+    ],
+    "P_EM_In": [
+        "P18",
+        "Pressure_EM_In",
+        "Total em power",
+        "EM_Power",
+        "EM Power"
+    ],
+    "P_EM_Out": [
+        "P19",
+        "Pressure_EM_Out",
+        "EM Out Pressure"
+    ]
+}

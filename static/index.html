@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermosense AI</title>
+    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                Thermosense
+            </div>
+            <button id="sidebarClose" class="btn-outline" style="border:none; padding:0.5rem;"
+                aria-label="Close Sidebar">✕</button>
+        </div>
+
+        <div class="sidebar-content">
+            <button id="newChatBtn" class="btn-primary" aria-label="Start New Chat">
+                <span>+</span> New Chat
+            </button>
+
+            <div class="section-title">DATA FILES</div>
+            <ul id="uploadedFilesList" class="file-list">
+                <!-- Files injected here -->
+            </ul>
+
+            <!-- Hidden file input for multiple files including PPT -->
+            <input type="file" id="fileInput" style="display: none;" accept=".csv,.xlsx,.xls,.ppt,.pptx" multiple
+                aria-label="Upload File" title="Upload File">
+
+            <div class="section-title">HISTORY</div>
+            <ul id="sessionList" class="session-list">
+                <!-- Sessions injected here -->
+            </ul>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <header>
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <button id="menuBtn" class="btn-outline" aria-label="Open Menu">☰</button>
+                <div class="header-title">Thermal Analysis Assistant</div>
+            </div>
+        </header>
+
+        <div id="messages">
+            <!-- Messages injected here -->
+        </div>
+
+        <!-- ChatGPT-style Input Area with Composer Button -->
+        <div class="input-container-wrapper">
+            <div class="input-container">
+                <!-- Composer Button (Left Side) -->
+                <div style="position: relative;">
+                    <button id="composerBtn" class="btn-composer" aria-label="Composer Options" title="Composer">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" x2="12" y1="8" y2="16"></line>
+                            <line x1="8" x2="16" y1="12" y2="12"></line>
+                        </svg>
+                    </button>
+
+                    <!-- Composer Dropdown Menu (Opens Upwards) -->
+                    <div id="composerDropdown" class="composer-dropdown">
+                        <button id="composerUploadBtn" class="composer-item">
+                            <span class="composer-icon">📂</span>
+                            <div class="composer-text">
+                                <div class="composer-title">Perform Analysis</div>
+                                <div class="composer-desc">Upload CSV or Excel to start</div>
+                            </div>
+                        </button>
+                        <button id="composerChartBtn" class="composer-item">
+                            <span class="composer-icon">📊</span>
+                            <div class="composer-text">
+                                <div class="composer-title">Select Chart</div>
+                                <div class="composer-desc">Choose chart type to visualize</div>
+                            </div>
+                        </button>
+                        <button id="composerExtractBtn" class="composer-item">
+                            <span class="composer-icon">⚡</span>
+                            <div class="composer-text">
+                                <div class="composer-title">Smart Extraction</div>
+                                <div class="composer-desc">Extract data from Excel/PPT</div>
+                            </div>
+                        </button>
+                        <button id="composerCompareBtn" class="composer-item">
+                            <span class="composer-icon">⚖️</span>
+                            <div class="composer-text">
+                                <div class="composer-title">Compare Files</div>
+                                <div class="composer-desc">Multi-file analysis</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <textarea id="chatInput" placeholder="Message ThermoSense..." rows="1" aria-label="Chat Message"
+                    title="Chat Message"></textarea>
+
+                <button id="sendBtn" class="btn-icon" aria-label="Send Message">
+                    ➤
+                </button>
+            </div>
+            <div style="text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                ThermoSense can make mistakes. Consider checking important information.
+            </div>
+            <!-- Hidden session input for JS compatibility -->
+            <input type="hidden" id="sessionInput">
+        </div>
+    </main>
+
+    <!-- Chart/Heatmap Configuration Modal -->
+    <div id="columnSelector" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Chart Configuration</h3>
+                <button id="closeModal" class="btn-outline" style="border:none;">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label class="form-label" style="margin-bottom: 0;">Select File</label>
+                        <label
+                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                            <input type="checkbox" id="showGlobalColumns">
+                            <span>Show columns from all files</span>
+                        </label>
+                    </div>
+                    <select id="fileSelect" class="form-select" aria-label="Select File" title="Select File">
+                        <option value="">Select a file...</option>
+                    </select>
+                </div>
+
+                <div class="column-grid">
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                            <label class="form-label">X-Axis (Time/Independent)</label>
+                        </div>
+                        <input type="text" id="xSearch" class="form-input" placeholder="Search..."
+                            aria-label="Search X-Axis Columns" title="Search X-Axis Columns"
+                            style="margin-bottom:0.5rem;">
+                        <div id="xSelect" class="column-list"></div>
+                    </div>
+
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                            <label class="form-label">Y-Axis (Values)</label>
+                        </div>
+                        <input type="text" id="ySearch" class="form-input" placeholder="Search..."
+                            aria-label="Search Y-Axis Columns" title="Search Y-Axis Columns"
+                            style="margin-bottom:0.5rem;">
+                        <div id="ySelect" class="column-list"></div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="clearSelection" class="btn-outline">Clear</button>
+                    <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+                        <button id="skipSelection" class="btn-outline">Skip</button>
+                        <button id="moveSelected" class="btn-primary">Move with Selected</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Type Selection Modal -->
+    <div id="chartTypeModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Select Chart Type</h3>
+                <button id="closeChartTypeModal" class="btn-outline" style="border:none;">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+                    How would you like to visualize your data?
+                </p>
+                <div class="chart-type-grid">
+                    <button class="chart-type-option" data-chart-type="line">
+                        <span class="chart-type-icon">📈</span>
+                        <div class="chart-type-name">Line Chart</div>
+                        <div class="chart-type-desc">Show trends over time</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="bar">
+                        <span class="chart-type-icon">📊</span>
+                        <div class="chart-type-name">Bar Chart</div>
+                        <div class="chart-type-desc">Compare values</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="scatter">
+                        <span class="chart-type-icon">⚫</span>
+                        <div class="chart-type-name">Scatter Plot</div>
+                        <div class="chart-type-desc">Show correlations</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="area">
+                        <span class="chart-type-icon">📉</span>
+                        <div class="chart-type-name">Area Chart</div>
+                        <div class="chart-type-desc">Display cumulative data</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="histogram">
+                        <span class="chart-type-icon">📊</span>
+                        <div class="chart-type-name">Histogram</div>
+                        <div class="chart-type-desc">Distribution analysis</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="heatmap">
+                        <span class="chart-type-icon">🔥</span>
+                        <div class="chart-type-name">Heatmap</div>
+                        <div class="chart-type-desc">Correlation matrix</div>
+                    </button>
+                    <button class="chart-type-option" data-chart-type="pie">
+                        <span class="chart-type-icon">🥧</span>
+                        <div class="chart-type-name">Pie Chart</div>
+                        <div class="chart-type-desc">Part-to-whole</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Smart Extraction Modal -->
+    <div id="extractionModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Smart Extraction</h3>
+                <button id="closeExtractionModal" class="btn-outline" style="border:none;">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" style="margin-bottom: 0;">Select File(s)</label>
+                    <button id="extractUploadBtn" class="btn-outline"
+                        style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">+ Upload New</button>
+                </div>
+                <div class="form-group">
+                    <select id="extractFileSelect" class="form-select" multiple style="height: 100px;">
+                        <option value="">Select file(s)...</option>
+                    </select>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        Hold Ctrl/Cmd to select multiple files.
+                    </div>
+                </div>
+
+                <!-- Dynamic Sheet Selection -->
+                <div id="sheetGroup" class="form-group" style="display: none;">
+                    <label class="form-label">Select Sheet</label>
+                    <select id="sheetSelect" class="form-select">
+                        <option value="">-- Select Sheet --</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic Column Selection -->
+                <div id="columnGroup" class="form-group" style="display: none;">
+                    <label class="form-label">Select Columns</label>
+                    <div id="columnSelect" class="column-list"
+                        style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem;">
+                        <!-- Columns injected here -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label id="extractParamsLabel" for="extractParams" class="form-label">Extraction Parameters
+                        (Comma-separated)</label>
+                    <textarea id="extractParams" class="form-input" rows="3"
+                        placeholder="e.g., T_EMD_In_Tot, P_EM_In, Total em power"></textarea>
+                </div>
+
+                <!-- Report Section Selection -->
+                <div class="form-group">
+                    <label class="form-label">Add to Report Section</label>
+                    <select id="sectionSelect" class="form-select">
+                        <option value="">-- Select Section (Optional) --</option>
+                        <option value="Executive Summary">Executive Summary</option>
+                        <option value="Introduction">Introduction</option>
+                        <option value="Test Setup">Test Setup</option>
+                        <option value="Analysis and Results">Analysis and Results</option>
+                        <option value="Discussion">Discussion</option>
+                        <option value="Conclusion">Conclusion</option>
+                        <option value="Appendices">Appendices</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="extractStrict">
+                        <span class="form-label" style="margin-bottom: 0;">Strict Mode (Exact matches only)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelExtraction" class="btn-outline"
+                    style="border:none; color:var(--text-muted);">Cancel</button>
+                <button id="performExtraction" class="btn-primary">Start Extraction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Comparison Modal -->
+    <div id="comparisonModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Advanced File Comparison</h3>
+                <button id="closeComparisonModal" class="btn-outline" style="border:none;">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Base File Selection -->
+                <div class="form-group"
+                    style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius);">
+                    <label class="form-label" style="font-weight: 600;">Base Configuration (X-Axis)</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <select id="compBaseFile" class="form-select" style="flex: 1;">
+                            <option value="">-- Select Base File --</option>
+                        </select>
+                        <select id="compBaseX" class="form-select" style="flex: 1;">
+                            <option value="">-- Select X Column --</option>
+                        </select>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        This file's X-axis will be used as the common timeline/index for all series.
+                    </div>
+                </div>
+
+                <!-- Comparison Series -->
+                <div class="form-group">
+                    <label class="form-label"
+                        style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Comparison Series (Y-Axis)</span>
+                        <button id="addCompSeriesBtn" class="btn-outline"
+                            style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">+ Add Series</button>
+                    </label>
+                    <div id="compSeriesContainer"
+                        style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <!-- Dynamic rows added here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="runComparisonBtn" class="btn-primary" style="width: 100%;">
+                    <span>Run Comparison</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/app.js?v=12"></script>
+    <script src="/static/extraction.js?v=12"></script>
+    <script src="/static/comparison.js?v=12"></script>
+    <script src="/static/column-search.js?v=12"></script>
+
+</body>
+
+</html>
