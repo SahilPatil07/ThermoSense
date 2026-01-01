@@ -93,14 +93,34 @@ def _values_from_range(ws, a1_range: str):
     Extract values from a range safely.
     """
     try:
+        if not a1_range or ":" not in a1_range:
+            logger.warning(f"Invalid range format: {a1_range}. Defaulting to A1:Z100")
+            a1_range = "A1:Z100"
+            
         min_col, min_row, max_col, max_row = range_boundaries(a1_range)
+        
+        # Clamp values to worksheet limits
+        max_row = min(max_row, ws.max_row or 10000)
+        max_col = min(max_col, ws.max_column or 1000)
+        
         out = []
         for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col, values_only=True):
             out.append(list(row))
         return out
     except Exception as e:
         logger.error(f"Error iterating over range {a1_range}: {e}")
-        return []
+        # Fallback
+        try:
+            out = []
+            for r in range(1, 100):
+                row = [ws.cell(row=r, column=c).value for c in range(1, 20)]
+                if any(v is not None for v in row):
+                    out.append(row)
+                else:
+                    break
+            return out
+        except:
+            return []
 
 def _used_range(ws) -> str:
     """

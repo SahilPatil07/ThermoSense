@@ -1,0 +1,19 @@
+/* Additional styles for multi-file signal selector */
+
+.badge-file-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.signal-files {
+    color: var(--text-muted) !important;
+    font-style: italic;
+}

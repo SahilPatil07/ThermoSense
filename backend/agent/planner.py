@@ -198,9 +198,28 @@ Be specific and actionable. If the request is ambiguous, make reasonable assumpt
         steps = []
         expected_artifacts = []
         
+        # Get actual file metadata for intelligent planning
+        time_column = session_context.get("time_column")
+        numeric_columns = session_context.get("numeric_columns", [])
+        all_columns = session_context.get("columns", [])
+        
         # Detect intent
         if any(word in msg_lower for word in ['chart', 'plot', 'graph', 'visualize', 'show']):
-            # Chart generation
+            # Auto-detect time column if not provided
+            if not time_column and all_columns:
+                # Try to detect from column names
+                time_keywords = ['time', 'timestamp', 'tme', 'date', 'datetime', 'elapsed']
+                for col in all_columns:
+                    if any(keyword in col.lower() for keyword in time_keywords):
+                        time_column = col
+                        break
+            
+            # Default to first column if still no time column found
+            if not time_column and all_columns:
+                time_column = all_columns[0]
+                logger.warning(f"No time column detected, using first column: {time_column}")
+            
+            # Chart generation with actual column metadata
             steps.append(ExecutionStep(
                 step_number=1,
                 step_type=StepType.CHART,
@@ -209,14 +228,15 @@ Be specific and actionable. If the request is ambiguous, make reasonable assumpt
                 parameters={
                     "session_id": session_context.get("session_id", "default"),
                     "filename": session_context.get("files", [""])[0] if session_context.get("files") else "",
-                    "x_column": "Time",
-                    "y_columns": [],
+                    "x_column": time_column or "Time",  # Fallback to "Time" only if no columns available
+                    "y_columns": numeric_columns[:5] if numeric_columns else [],  # Use first 5 numeric columns
                     "chart_type": "line"
                 },
                 depends_on=[],
                 expected_output="Interactive chart visualization"
             ))
             expected_artifacts.append("chart")
+        
         
         if any(word in msg_lower for word in ['compare', 'comparison', 'difference']):
             # Comparison

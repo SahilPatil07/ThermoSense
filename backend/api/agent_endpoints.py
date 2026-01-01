@@ -73,12 +73,36 @@ async def execute_agent_workflow(req: AgentExecuteRequest):
             from backend.tools.storage import SessionStorage
             storage = SessionStorage()
             
+            # Build session context with file metadata
+            uploaded_files = storage.get_uploads(req.session_id)
             session_context = {
                 "session_id": req.session_id,
-                "files": storage.get_uploads(req.session_id),
+                "files": uploaded_files,
                 "charts": [],  # TODO: Get from storage
-                "columns": []  # TODO: Get from file context
             }
+            
+            # Get file metadata if files are available
+            if uploaded_files:
+                from backend.tools.sensor_harvester import SensorHarvester
+                harvester = SensorHarvester()
+                
+                # Get metadata from first file (primary file)
+                first_file = uploaded_files[0]
+                file_path = storage.find_file(first_file)
+                
+                if file_path and file_path.exists():
+                    try:
+                        columns, time_column, numeric_columns = harvester.get_file_columns(str(file_path))
+                        session_context["columns"] = columns
+                        session_context["time_column"] = time_column
+                        session_context["numeric_columns"] = numeric_columns
+                        logger.info(f"Loaded file metadata: {len(columns)} columns, time_column={time_column}")
+                    except Exception as e:
+                        logger.warning(f"Could not load file metadata: {e}")
+                        session_context["columns"] = []
+                        session_context["time_column"] = None
+                        session_context["numeric_columns"] = []
+            
             
             logger.info("Creating execution plan...")
             plan = agent_planner.create_plan(

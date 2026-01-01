@@ -821,6 +821,7 @@ header {
     margin-top: 4px;
     font-style: italic;
 }
+
 .column-file-label {
     font-size: 0.7rem;
     color: var(--text-muted);
@@ -832,4 +833,29 @@ header {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 120px;
+}
+
+/* Parameter Selection Enhancements */
+#paramList .column-item {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#paramList .column-item:last-child {
+    border-bottom: none;
+}
+
+#paramSearch {
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+#paramSearch:focus {
+    border-color: var(--primary-color);
+    background: white;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }

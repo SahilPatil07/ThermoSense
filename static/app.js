@@ -61,7 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
         toast: document.getElementById('toast'),
         sessionList: document.getElementById('sessionList'),
         sessionInput: document.getElementById('sessionInput'),
-        newChatBtn: document.getElementById('newChatBtn')
+        newChatBtn: document.getElementById('newChatBtn'),
+
+        // Parameter Selector
+        parameterSelector: document.getElementById('parameterSelector'),
+        closeParamModal: document.getElementById('closeParamModal'),
+        paramSearch: document.getElementById('paramSearch'),
+        paramList: document.getElementById('paramList'),
+        skipParamSelection: document.getElementById('skipParamSelection'),
+        nextToChartType: document.getElementById('nextToChartType'),
+
+        // Updated Column Selector
+        showOnlySelectedParams: document.getElementById('showOnlySelectedParams'),
+        generateChartBtn: document.getElementById('generateChartBtn')
     };
 
     // Global state
@@ -71,6 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isHeatmapMode = false;
     let selectedChartType = 'line';
     let pendingChartData = null;
+    let selectedParameters = []; // New state for parameter selection
+    let allCommonColumns = []; // Store unique common columns across all files
 
     // Utility: Get session ID
     function sessionId() {
@@ -115,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Explicitly hide modals on page load
         if (els.columnSelector) els.columnSelector.style.display = 'none';
         if (els.chartTypeModal) els.chartTypeModal.style.display = 'none';
+        if (els.parameterSelector) els.parameterSelector.style.display = 'none';
 
         // Wire all event listeners
         wireEvents();
@@ -159,12 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
             els.composerDropdown.classList.remove('show');
         };
 
-        // Select Chart button - opens column selector first
+        // Select Chart button - opens parameter selector first
         if (els.composerChartBtn) {
             els.composerChartBtn.onclick = () => {
-                if (els.columnSelector) {
-                    els.columnSelector.style.display = 'flex';
-                }
+                openParameterSelector();
                 els.composerDropdown.classList.remove('show');
             };
         }
@@ -175,20 +188,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // File select dropdown in modal
         if (els.fileSelect) {
             els.fileSelect.onchange = () => {
-                const filename = els.fileSelect.value;
-                if (filename && currentFileData[filename]) {
-                    const fileData = currentFileData[filename];
-                    populateColumnLists(fileData.columns, fileData.time_column, fileData.numeric_columns);
-                } else {
-                    els.xSelect.innerHTML = '';
-                    els.ySelect.innerHTML = '';
-                }
+                refreshColumnLists();
             };
         }
 
         // Modal close buttons
         if (els.closeModal) els.closeModal.onclick = () => els.columnSelector.style.display = 'none';
         if (els.closeChartTypeModal) els.closeChartTypeModal.onclick = () => els.chartTypeModal.style.display = 'none';
+        if (els.closeParamModal) els.closeParamModal.onclick = () => els.parameterSelector.style.display = 'none';
 
         // Composer buttons
         if (els.composerExtractBtn) {
@@ -223,41 +230,28 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear selection
         if (els.clearSelection) els.clearSelection.onclick = () => clearColumnSelection();
 
-        // Skip selection
-        if (els.skipSelection) {
-            els.skipSelection.onclick = () => handleSkipSelection();
-        }
-
-        // Move with selected
-        if (els.moveSelectedBtn) {
-            els.moveSelectedBtn.onclick = () => handleMoveWithSelected();
-        }
-
         // Global columns toggle
         if (els.showGlobalColumns) {
             els.showGlobalColumns.onchange = () => {
-                const filename = els.fileSelect.value;
-                if (els.showGlobalColumns.checked) {
-                    populateGlobalColumns();
-                } else if (filename && currentFileData[filename]) {
-                    const fileData = currentFileData[filename];
-                    populateColumnLists(fileData.columns, fileData.time_column, fileData.numeric_columns);
-                } else {
-                    els.xSelect.innerHTML = '';
-                    els.ySelect.innerHTML = '';
-                }
+                refreshColumnLists();
             };
         }
 
-        // Apply columns (legacy, keeping for safety if button still exists)
-        if (els.applyColumnsBtn) {
-            els.applyColumnsBtn.onclick = () => {
-                if (els.columnSelector) els.columnSelector.style.display = 'none';
-                if (els.chartTypeModal) {
-                    els.chartTypeModal.style.display = 'flex';
-                    fetchChartRecommendations();
-                }
+        // Show only selected params toggle
+        if (els.showOnlySelectedParams) {
+            els.showOnlySelectedParams.onchange = () => {
+                refreshColumnLists();
             };
+        }
+
+        // Parameter selection handlers
+        if (els.skipParamSelection) els.skipParamSelection.onclick = () => handleParameterSkip();
+        if (els.nextToChartType) els.nextToChartType.onclick = () => handleParameterNext();
+        if (els.paramSearch) els.paramSearch.oninput = () => filterColumnList(els.paramSearch, els.paramList);
+
+        // Generate chart button
+        if (els.generateChartBtn) {
+            els.generateChartBtn.onclick = () => handleGenerateChart();
         }
 
         // Chart type selection
@@ -267,9 +261,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('.chart-type-option').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
 
-                // Generate chart immediately after selection
-                handleColumnSelectionDirect();
+                // Next step: Axis Configuration
                 if (els.chartTypeModal) els.chartTypeModal.style.display = 'none';
+                if (els.columnSelector) {
+                    els.columnSelector.style.display = 'flex';
+                    refreshColumnLists();
+                }
             };
         });
 
@@ -319,20 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentFileData[data.filename] = data;
                     showToast(`${data.filename} uploaded successfully`, 'success');
                     addMessage(`File "${data.filename}" uploaded.`, 'bot');
-
-                    // Sequential Flow: Open column selector automatically
-                    setTimeout(() => {
-                        if (els.columnSelector) {
-                            els.columnSelector.style.display = 'flex';
-                            if (els.fileSelect) {
-                                els.fileSelect.value = data.filename;
-                                populateColumnLists(data.columns, data.time_column, data.numeric_columns);
-                            }
-                        }
-                    }, 500);
-
-                    // Phase 3: Poll for proactive insights
-                    pollForInsights();
                 } else {
                     showToast(`Upload failed: ${data.error}`, 'error');
                 }
@@ -343,6 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await refreshUploads();
         els.fileInput.value = '';
+
+        // NEW: Open parameter selector after all uploads
+        setTimeout(() => {
+            openParameterSelector();
+        }, 800);
 
         // Dispatch event for other modules
         document.dispatchEvent(new CustomEvent('file-uploaded'));
@@ -370,6 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     li.onclick = () => {
                         els.fileSelect.value = f.filename;
                         els.sidebar.classList.remove('active');
+                        refreshColumnLists();
                     };
                     els.uploadedFilesList.appendChild(li);
 
@@ -393,6 +382,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.refreshUploads = refreshUploads;
 
+    // --- New Workflow Functions ---
+
+    function openParameterSelector() {
+        if (!els.parameterSelector) return;
+
+        // Collect all unique columns from all uploaded files
+        const allCols = new Set();
+        Object.values(currentFileData).forEach(file => {
+            if (file.columns) {
+                file.columns.forEach(col => allCols.add(col));
+            }
+        });
+
+        allCommonColumns = Array.from(allCols).sort();
+
+        if (allCommonColumns.length === 0) {
+            console.log('No columns available for parameter selection');
+            return;
+        }
+
+        populateParameterList(allCommonColumns);
+        els.parameterSelector.style.display = 'flex';
+    }
+
+    function populateParameterList(columns) {
+        if (!els.paramList) return;
+        els.paramList.innerHTML = '';
+
+        columns.forEach(col => {
+            const div = document.createElement('div');
+            div.className = 'column-item';
+            div.innerHTML = `<input type="checkbox" class="column-checkbox"> <span>${col}</span>`;
+            div.onclick = (e) => {
+                const cb = div.querySelector('.column-checkbox');
+                if (e.target !== cb) cb.checked = !cb.checked;
+                div.classList.toggle('selected', cb.checked);
+            };
+            els.paramList.appendChild(div);
+        });
+    }
+
+    function handleParameterNext() {
+        const selected = Array.from(els.paramList.querySelectorAll('.column-item.selected'))
+            .map(el => el.textContent.trim());
+
+        if (selected.length === 0) {
+            showToast('Please select at least one parameter or click Skip', 'warning');
+            return;
+        }
+
+        selectedParameters = selected;
+        els.parameterSelector.style.display = 'none';
+        if (els.chartTypeModal) els.chartTypeModal.style.display = 'flex';
+        fetchChartRecommendations();
+    }
+
+    function handleParameterSkip() {
+        selectedParameters = []; // Empty means show all
+        els.parameterSelector.style.display = 'none';
+        if (els.chartTypeModal) els.chartTypeModal.style.display = 'flex';
+        fetchChartRecommendations();
+    }
+
+    function refreshColumnLists() {
+        const filename = els.fileSelect.value;
+        if (els.showGlobalColumns && els.showGlobalColumns.checked) {
+            populateGlobalColumns();
+        } else if (filename && currentFileData[filename]) {
+            const fileData = currentFileData[filename];
+            populateColumnLists(fileData.columns, fileData.time_column, fileData.numeric_columns);
+        } else {
+            els.xSelect.innerHTML = '';
+            els.ySelect.innerHTML = '';
+        }
+    }
+
+    async function handleGenerateChart() {
+        const xEl = els.xSelect.querySelector('.column-item.selected');
+        const yEls = Array.from(els.ySelect.querySelectorAll('.column-item.selected'));
+
+        if (!xEl || yEls.length === 0) {
+            showToast('Please select X-axis and at least one Y-axis column', 'warning');
+            return;
+        }
+
+        const filename = xEl.dataset.filename || els.fileSelect.value;
+        if (!filename) {
+            showToast('Please select a file', 'warning');
+            return;
+        }
+
+        pendingChartData = {
+            filename: filename,
+            x_column: xEl.dataset.originalCol || xEl.textContent.trim(),
+            y_columns: yEls.map(el => el.dataset.originalCol || el.textContent.trim())
+        };
+
+        if (els.columnSelector) els.columnSelector.style.display = 'none';
+        handleColumnSelectionDirect();
+    }
+
     // Populate column selection lists
     function populateColumnLists(columns, timeColumn, numericColumns, filename = null) {
         if (!els.xSelect || !els.ySelect) return;
@@ -405,7 +495,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        columns.forEach(col => {
+        // Filter by selectedParameters if toggle is on
+        let displayCols = columns;
+        if (els.showOnlySelectedParams && els.showOnlySelectedParams.checked && selectedParameters.length > 0) {
+            displayCols = columns.filter(col => selectedParameters.includes(col));
+        }
+
+        displayCols.forEach(col => {
             // X-Axis (single select)
             const xDiv = document.createElement('div');
             xDiv.className = 'column-item';
@@ -456,7 +552,13 @@ document.addEventListener('DOMContentLoaded', () => {
         files.forEach(fname => {
             const data = currentFileData[fname];
             if (data.columns) {
-                data.columns.forEach(col => {
+                // Filter by selectedParameters if toggle is on
+                let displayCols = data.columns;
+                if (els.showOnlySelectedParams && els.showOnlySelectedParams.checked && selectedParameters.length > 0) {
+                    displayCols = data.columns.filter(col => selectedParameters.includes(col));
+                }
+
+                displayCols.forEach(col => {
                     // X-Axis
                     const xDiv = document.createElement('div');
                     xDiv.className = 'column-item';
@@ -489,66 +591,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleSkipSelection() {
-        if (els.columnSelector) els.columnSelector.style.display = 'none';
-        if (els.chartTypeModal) {
-            els.chartTypeModal.style.display = 'flex';
-            fetchChartRecommendations();
-        }
-    }
-
-    async function handleMoveWithSelected() {
-        console.log('handleMoveWithSelected triggered');
-        const xEl = els.xSelect.querySelector('.column-item.selected');
-        const yEls = Array.from(els.ySelect.querySelectorAll('.column-item.selected'));
-
-        console.log('Selected X:', xEl ? xEl.textContent : 'None');
-        console.log('Selected Y count:', yEls.length);
-
-        if (!xEl || yEls.length === 0) {
-            showToast('Please select X-axis and at least one Y-axis column', 'warning');
-            return;
-        }
-
-        const filename = xEl.dataset.filename || els.fileSelect.value;
-        console.log('Determined filename:', filename);
-
-        if (!filename) {
-            showToast('Could not determine file for selection', 'error');
-            return;
-        }
-
-        // Store pending selection
-        pendingChartData = {
-            filename: filename,
-            x_column: xEl.dataset.originalCol || xEl.textContent,
-            y_columns: yEls.map(el => el.dataset.originalCol || el.textContent)
-        };
-        console.log('Pending chart data stored:', pendingChartData);
-
-        if (els.columnSelector) {
-            console.log('Hiding column selector');
-            els.columnSelector.style.display = 'none';
-        }
-        if (els.chartTypeModal) {
-            console.log('Showing chart type modal');
-            els.chartTypeModal.style.display = 'flex';
-            fetchChartRecommendations();
-        } else {
-            console.error('chartTypeModal element not found!');
-        }
-    }
-
     async function fetchChartRecommendations() {
         console.log('fetchChartRecommendations triggered');
-        const yEls = Array.from(els.ySelect.querySelectorAll('.column-item.selected'));
-        if (yEls.length === 0) {
-            console.log('No Y columns selected, skipping recommendations');
+        // If we have selected parameters, use them for recommendations
+        const yCols = selectedParameters.length > 0 ? selectedParameters : [];
+
+        if (yCols.length === 0) {
+            console.log('No columns for recommendations');
             return;
         }
-
-        const yCols = yEls.map(el => el.dataset.originalCol || el.textContent);
-        console.log('Fetching recommendations for:', yCols);
 
         try {
             const resp = await fetch('/api/chart/recommend', {
@@ -595,12 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         btn.appendChild(reason);
                     }
                 });
-            } else {
-                console.warn('Recommendation failed or returned no data:', data.error || 'No recommendations');
             }
         } catch (e) {
             console.error('Failed to fetch recommendations:', e);
-            // Don't show toast to user, just log it. Recommendations are optional.
         }
     }
 
@@ -620,15 +668,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const xEl = els.xSelect.querySelector('.column-item.selected');
             const yEls = Array.from(els.ySelect.querySelectorAll('.column-item.selected'));
 
-            console.log('Manual selection - File:', filename, 'X:', xEl ? xEl.textContent : 'None', 'Y count:', yEls.length);
-
             if (!filename || !xEl || yEls.length === 0) {
                 showToast('Please select a file, X-axis, and at least one Y-axis column', 'warning');
                 return;
             }
 
-            xCol = xEl.dataset.originalCol || xEl.textContent;
-            yCols = yEls.map(el => el.dataset.originalCol || el.textContent);
+            xCol = xEl.dataset.originalCol || xEl.textContent.trim();
+            yCols = yEls.map(el => el.dataset.originalCol || el.textContent.trim());
         }
 
         showToast('Generating chart...', 'info');
@@ -766,25 +812,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function sendFeedback(chartId, feedback) {
         try {
-            const resp = await fetch('/api/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: sessionId(),
-                    chart_id: chartId,
-                    feedback: feedback
-                })
-            });
-            const data = await resp.json();
-            if (data.success) {
-                showToast(data.message, 'success');
-                // Optional: visually mark the button as active
-                const msgDiv = document.querySelector(`[data-chart-id="${chartId}"]`);
-                if (msgDiv) {
-                    const btns = msgDiv.querySelectorAll('.btn-feedback');
-                    btns.forEach(b => b.classList.remove('active'));
-                    const activeBtn = feedback === 'positive' ? btns[0] : btns[1];
-                    if (activeBtn) activeBtn.classList.add('active');
+            const msgDiv = document.querySelector(`[data-chart-id="${chartId}"]`);
+            const feedbackBtns = msgDiv?.querySelector('.feedback-buttons');
+
+            if (feedback === 'positive') {
+                // Show section selection UI
+                if (feedbackBtns) {
+                    feedbackBtns.innerHTML = `
+                        <div style="display: flex; flex-direction: column; gap: 1rem; padding: 1rem; background: var(--bg-color); border-radius: var(--radius); border: 1px solid var(--border-color); margin-top: 1rem;">
+                            <div style="font-weight: 600; color: var(--text-primary);">✅ Add this chart to report</div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="font-size: 0.9rem; color: var(--text-secondary);">Section:</label>
+                                <select id="section-select-${chartId}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius); background: white;">
+                                    <option value="">-- Select Section --</option>
+                                    <option value="Executive Summary">Executive Summary</option>
+                                    <option value="Introduction">Introduction</option>
+                                    <option value="Test Setup">Test Setup</option>
+                                    <option value="Analysis and Results" selected>Analysis and Results</option>
+                                    <option value="Discussion">Discussion</option>
+                                    <option value="Conclusion">Conclusion</option>
+                                    <option value="Appendices">Appendices</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-primary" onclick="addChartToReport('${chartId}')" style="flex: 1;">
+                                    ➕ Add to Report
+                                </button>
+                                <button class="btn-outline" onclick="cancelFeedback('${chartId}')" style="padding: 0.5rem 1rem;">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                // Thumbs down - send feedback and mark as rejected
+                const resp = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId(),
+                        chart_id: chartId,
+                        feedback: feedback
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast('Chart marked as not useful', 'info');
+                    if (feedbackBtns) {
+                        feedbackBtns.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">👎 Feedback recorded</div>';
+                    }
                 }
             }
         } catch (e) {
@@ -792,6 +869,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     window.sendFeedback = sendFeedback;
+
+    async function addChartToReport(chartId) {
+        const sectionSelect = document.getElementById(`section-select-${chartId}`);
+        const section = sectionSelect?.value;
+
+        if (!section) {
+            showToast('Please select a section', 'warning');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/report/add_chart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId(),
+                    chart_id: chartId,
+                    section: section,
+                    chart_path: null,
+                    description: null
+                })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showToast(`✅ Chart added to "${section}" section`, 'success');
+                const msgDiv = document.querySelector(`[data-chart-id="${chartId}"]`);
+                const feedbackBtns = msgDiv?.querySelector('.feedback-buttons');
+                if (feedbackBtns) {
+                    feedbackBtns.innerHTML = `<div style="color: var(--success-color); font-size: 0.9rem;">✅ Added to "${section}"</div>`;
+                }
+            } else {
+                showToast(`Failed to add chart: ${data.error || 'Unknown error'}`, 'error');
+            }
+        } catch (e) {
+            showToast(`Error: ${e.message}`, 'error');
+        }
+    }
+    window.addChartToReport = addChartToReport;
+
+    function cancelFeedback(chartId) {
+        const msgDiv = document.querySelector(`[data-chart-id="${chartId}"]`);
+        const feedbackBtns = msgDiv?.querySelector('.feedback-buttons');
+        if (feedbackBtns) {
+            // Restore original feedback buttons
+            feedbackBtns.innerHTML = `
+                <button class="btn-feedback" onclick="sendFeedback('${chartId}', 'positive')" title="Approve for report">👍</button>
+                <button class="btn-feedback" onclick="sendFeedback('${chartId}', 'negative')" title="Remove chart">👎</button>
+            `;
+        }
+    }
+    window.cancelFeedback = cancelFeedback;
 
     // Send chat message
     async function sendMessage() {

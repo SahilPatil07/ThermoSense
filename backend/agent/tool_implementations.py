@@ -338,11 +338,20 @@ class ToolImplementations:
             output_path = session_dir / "thermal_report.docx"
             
             # Generate report
-            report_path = self.report_generator.generate_report(
+            success, msg, report_path = self.report_generator.generate_report(
                 session_id=input_data.session_id,
                 storage=self.storage,
                 output_path=output_path
             )
+            
+            if not success:
+                 return GenerateReportOutput(
+                    success=False,
+                    report_path="",
+                    charts_included=0,
+                    sections_populated=[],
+                    summary=f"Report generation failed: {msg}"
+                ).dict()
             
             # Count charts
             report_content = self.storage.get_report_content(input_data.session_id)

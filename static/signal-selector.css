@@ -1,0 +1,151 @@
+/**
+ * Signal Selector Styles
+ */
+
+/* Signal Selector Modal */
+.signal-selector-modal {
+    max-width: 700px !important;
+}
+
+.signal-section-header {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.signal-section-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.signal-section-header p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* Signal Items */
+.signal-item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    transition: background 0.2s ease;
+}
+
+.signal-item:hover {
+    background: var(--bg-hover);
+}
+
+.signal-item.recommended {
+    background: rgba(245, 158, 11, 0.03);
+    border-left: 3px solid #f59e0b;
+}
+
+.signal-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+    margin-top: 2px;
+}
+
+.signal-item label {
+    flex: 1;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.signal-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.badge-recommended {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #f59e0b;
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.signal-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.signal-details small {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.signal-score {
+    color: #f59e0b !important;
+    font-weight: 500;
+}
+
+/* Selected Count */
+.selected-count {
+    flex: 1;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.selected-count span {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    min-width: 30px;
+    text-align: center;
+    margin-right: 0.5rem;
+}
+
+/* Signal List Container */
+#signalList {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+#signalList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#signalList::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+#signalList::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Button adjustments */
+.btn-secondary {
+    background: var(--bg-color) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: var(--radius) !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: var(--transition) !important;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-hover) !important;
+    border-color: var(--text-muted) !important;
+}

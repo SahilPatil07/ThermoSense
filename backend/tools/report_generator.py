@@ -16,6 +16,13 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def clean_xml_string(s: str) -> str:
+    """Remove non-XML compatible characters (control characters, null bytes)"""
+    if not isinstance(s, str):
+        return str(s)
+    # Remove null bytes and other control characters except \n, \r, \t
+    return "".join(ch for ch in s if ch == '\n' or ch == '\r' or ch == '\t' or (ord(ch) >= 32 and ord(ch) != 127))
+
 class ReportContextBuilder:
     """Builds comprehensive context for report generation"""
     
@@ -440,15 +447,15 @@ class ThermalReportGenerator:
                 if charts_added > 0:
                     print(f"Auto-populated {charts_added} new charts into report")
             
-            # DYNAMIC CONTENT GENERATION - Only generate truly required sections
+            # DYNAMIC CONTENT GENERATION - DISABLED as per user request
             # Speed optimization: Only generate Executive Summary and Conclusion if missing
             # Other sections can be empty or use fallback
-            critical_sections = ["Executive Summary", "Conclusion"]
-            for section in critical_sections:
-                if not report_content.get(section):
-                    print(f"Generating {section} using SectionWriter...")
-                    text = self.section_writer.write_section(section, context)
-                    report_content[section] = [{"type": "text", "content": text}]
+            # critical_sections = ["Executive Summary", "Conclusion"]
+            # for section in critical_sections:
+            #     if not report_content.get(section):
+            #         print(f"Generating {section} using SectionWriter...")
+            #         text = self.section_writer.write_section(section, context)
+            #         report_content[section] = [{"type": "text", "content": text}]
             
             # Iterate through our content and insert into template
             total_items = 0
@@ -488,8 +495,23 @@ class ThermalReportGenerator:
                     self._insert_content_after(doc, doc.paragraphs[-1], items, session_dir, storage, session_id)
                     total_items += len(items)
             
-            # Save
-            doc.save(output_path)
+            # Save with retry mechanism for PermissionError
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    doc.save(output_path)
+                    logger.info(f"Report saved successfully to {output_path}")
+                    break
+                except PermissionError:
+                    if attempt < max_retries - 1:
+                        import time
+                        # Try a different filename if it's locked
+                        timestamp = int(time.time())
+                        new_path = output_path.parent / f"thermal_report_{timestamp}.docx"
+                        logger.warning(f"Permission denied for {output_path.name}. Retrying with {new_path.name}")
+                        output_path = new_path
+                    else:
+                        raise
             
             return True, f"Report generated with {total_items} items", str(output_path)
         
@@ -587,7 +609,7 @@ class ThermalReportGenerator:
                 # We will create new paragraphs/runs and move them to the correct position
                 
                 if item_type == "text":
-                    new_p = doc.add_paragraph(content)
+                    new_p = doc.add_paragraph(clean_xml_string(content))
                     self._move_p_after(parent, new_p, index)
                     
                 elif item_type == "chart":
@@ -646,11 +668,42 @@ class ThermalReportGenerator:
                             print(f"   Chart file not found: {chart_path}")
 
                 elif item_type == "image":
-                     if Path(content).exists():
-                        img_p = doc.add_paragraph()
-                        run = img_p.add_run()
-                        run.add_picture(content, width=Inches(5.5))
-                        self._move_p_after(parent, img_p, index)
+                     content_path = Path(content)
+                     if content_path.exists():
+                        if content_path.suffix.lower() == '.txt':
+                            # Handle text fallback for slides
+                            try:
+                                with open(content_path, 'r', encoding='utf-8') as f:
+                                    text_content = f.read()
+                                # Add title if it looks like a slide
+                                if "Slide" in text_content and ":" in text_content.split('\n')[0]:
+                                    title_line = text_content.split('\n')[0]
+                                    p = doc.add_paragraph()
+                                    run = p.add_run(clean_xml_string(title_line))
+                                    run.bold = True
+                                    self._move_p_after(parent, p, index)
+                                    text_to_add = '\n'.join(text_content.split('\n')[1:])
+                                else:
+                                    text_to_add = text_content
+                                
+                                new_p = doc.add_paragraph(clean_xml_string(text_to_add))
+                                self._move_p_after(parent, new_p, index)
+                                logger.info(f"Inserted text fallback for slide from {content_path.name}")
+                            except Exception as e:
+                                logger.error(f"Failed to read text fallback slide: {e}")
+                        else:
+                            # Standard image
+                            img_p = doc.add_paragraph()
+                            img_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            run = img_p.add_run()
+                            # Ensure path is absolute and string
+                            img_path = str(content_path.absolute())
+                            try:
+                                run.add_picture(img_path, width=Inches(5.5))
+                                self._move_p_after(parent, img_p, index)
+                                logger.info(f"Inserted image from {content_path.name}")
+                            except Exception as e:
+                                logger.error(f"Failed to insert image {img_path}: {e}")
 
                 elif item_type == "table":
                     # Handle table
@@ -659,7 +712,7 @@ class ThermalReportGenerator:
                     if isinstance(content, str):
                         # Fallback: if content is a string (e.g. markdown), insert as text
                         logger.warning("Table content is a string, inserting as text paragraph.")
-                        new_p = doc.add_paragraph(content)
+                        new_p = doc.add_paragraph(clean_xml_string(content))
                         self._move_p_after(parent, new_p, index)
                         continue
 
@@ -669,12 +722,15 @@ class ThermalReportGenerator:
                     if table_data and columns:
                         # Create table
                         table = doc.add_table(rows=1, cols=len(columns))
-                        table.style = 'Table Grid'
+                        try:
+                            table.style = 'Table Grid'
+                        except:
+                            logger.warning("Style 'Table Grid' not found in template, using default.")
                         
                         # Header
                         hdr_cells = table.rows[0].cells
                         for i, col in enumerate(columns):
-                            hdr_cells[i].text = str(col)
+                            hdr_cells[i].text = clean_xml_string(str(col))
                             # Make bold
                             for paragraph in hdr_cells[i].paragraphs:
                                 for run in paragraph.runs:
@@ -685,7 +741,10 @@ class ThermalReportGenerator:
                             row_cells = table.add_row().cells
                             for i, col in enumerate(columns):
                                 val = row_data.get(col, "")
-                                row_cells[i].text = str(val)
+                                row_cells[i].text = clean_xml_string(str(val))
+                        
+                        # Apply borders manually to ensure they are visible
+                        self._apply_table_borders(table)
                         
                         # Move table using the same helper (it works for any element)
                         self._move_p_after(parent, table, index)
@@ -696,13 +755,30 @@ class ThermalReportGenerator:
             print(f"Error inserting content: {e}")
 
     
-    def _move_p_after(self, parent, paragraph, index):
-        """Move a newly created paragraph to a specific index in the parent"""
-        # Remove from end
-        p_element = paragraph._element
-        parent.remove(p_element)
-        # Insert at index
-        parent.insert(index, p_element)
+    def _move_p_after(self, parent, element, index):
+        """Move a paragraph or table element to a specific index in the parent"""
+        parent.insert(index, element._element)
+
+    def _apply_table_borders(self, table):
+        """Manually apply borders to a table using XML manipulation"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        tbl = table._element
+        tblPr = tbl.xpath('w:tblPr')[0]
+        
+        # Create tblBorders element
+        tblBorders = OxmlElement('w:tblBorders')
+        
+        for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), '4') # 1/2 pt
+            border.set(qn('w:space'), '0')
+            border.set(qn('w:color'), '000000')
+            tblBorders.append(border)
+            
+        tblPr.append(tblBorders)
 
     def _find_chart_in_history(self, chart_id: str, storage, session_id: str) -> Optional[Dict]:
         """Look up chart details from history"""

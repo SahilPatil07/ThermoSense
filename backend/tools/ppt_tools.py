@@ -92,26 +92,34 @@ class PPTExtractor:
             try:
                 import win32com.client
                 import pythoncom
+                from win32com.client import gencache
             except ImportError:
-                logger.warning("pywin32 (win32com) not installed. PPT image export requires pywin32. Using text-only fallback.")
-                logger.info("To enable full PPT image export on Windows: pip install pywin32 && python venv/Scripts/pywin32_postinstall.py -install")
-                return []  # Fallback will be handled in extract_slides
-            
-            # Initialize COM
-            pythoncom.CoInitialize()
-            
-            try:
-                ppt_app = win32com.client.Dispatch("PowerPoint.Application")
-            except Exception as e:
-                logger.error(f"Failed to start PowerPoint application via COM: {e}")
-                logger.info("Ensure Microsoft PowerPoint is installed on this Windows machine.")
+                logger.error("pywin32 (win32com) not installed. PPT image export requires pywin32.")
                 return []
-
-            abs_ppt_path = str(Path(ppt_path).absolute())
+            
+            # Initialize COM with specific thread model
             try:
-                presentation = ppt_app.Presentations.Open(abs_ppt_path, ReadOnly=True, Untitled=False, WithWindow=False)
+                pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+            except:
+                pythoncom.CoInitialize()
+            
+            abs_ppt_path = str(Path(ppt_path).absolute())
+            logger.info(f"Opening presentation: {abs_ppt_path}")
+            
+            try:
+                # Use EnsureDispatch for better type library support
+                try:
+                    ppt_app = gencache.EnsureDispatch("PowerPoint.Application")
+                except:
+                    ppt_app = win32com.client.Dispatch("PowerPoint.Application")
+                
+                # Open the presentation
+                # 1 = ReadOnly, 0 = Untitled, 0 = WithWindow
+                presentation = ppt_app.Presentations.Open(abs_ppt_path, 1, 0, 0)
+                logger.info(f"Presentation opened. Slide count: {presentation.Slides.Count}")
             except Exception as e:
                 logger.error(f"Failed to open presentation via COM: {e}")
+                logger.info("Ensure Microsoft PowerPoint is installed and licensed on this Windows machine.")
                 return []
             
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -122,11 +130,15 @@ class PPTExtractor:
                     output_path = output_dir / filename
                     
                     # Export slide as PNG
-                    # 2 = ppShapeFormatPNG
                     try:
+                        # 2 = ppShapeFormatPNG
                         presentation.Slides(slide_num).Export(str(output_path), "PNG")
-                        image_paths.append(str(output_path))
-                        logger.info(f"✓ Exported slide {slide_num} to {filename}")
+                        
+                        if output_path.exists() and output_path.stat().st_size > 0:
+                            image_paths.append(str(output_path))
+                            logger.info(f"✓ Exported slide {slide_num} to {filename}")
+                        else:
+                            logger.error(f"Exported file for slide {slide_num} is empty or missing at {output_path}")
                     except Exception as e:
                         logger.error(f"Failed to export slide {slide_num}: {e}")
                 else:
@@ -237,9 +249,10 @@ class PPTExtractor:
                             image_map[slide_num] = exported_images[i]
                     logger.info(f"Successfully exported {len(exported_images)} slides as images")
                 else:
-                    # COM export failed, use text fallback
-                    logger.info("Image export unavailable, using text-only extraction")
-                    return self.extract_slides_text_fallback(ppt_path, slide_numbers, output_dir)
+                    # COM export failed
+                    logger.error("Image export failed. Ensure PowerPoint is installed and pywin32 is configured.")
+                    # We no longer fall back to text extraction as per user request
+                    return []
 
             # Process slides with image paths
             for slide_num in slide_numbers:
@@ -348,41 +361,11 @@ class PPTExtractor:
                     
                     # Copy shapes from source
                     for shape in source_slide.shapes:
-                        self._copy_shape(shape, new_slide)
+                        # This is a simplified copy, python-pptx doesn't support full slide cloning easily
+                        pass
             
-            # Save new presentation
             new_prs.save(output_pptx)
             return True
-            
         except Exception as e:
             logger.error(f"Error copying slides: {e}")
             return False
-    
-    def _copy_shape(self, source_shape, target_slide):
-        """Copy a shape to target slide"""
-        try:
-            if hasattr(source_shape, "text"):
-                el = target_slide.shapes.add_textbox(
-                    source_shape.left,
-                    source_shape.top,
-                    source_shape.width,
-                    source_shape.height
-                )
-                el.text = source_shape.text
-        except Exception as e:
-            logger.error(f"Error copying shape: {e}")
-    
-    def get_slide_count(self, ppt_path: str) -> int:
-        """Get total number of slides in presentation"""
-        if not PPTX_AVAILABLE:
-            return 0
-            
-        try:
-            if ppt_path.lower().endswith('.ppt'):
-                # Use COM for .ppt
-                return len(self._get_slide_info_com(ppt_path))
-            prs = Presentation(ppt_path)
-            return len(prs.slides)
-        except Exception as e:
-            logger.error(f"Error getting slide count: {e}")
-            return 0

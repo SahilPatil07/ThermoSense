@@ -117,59 +117,24 @@
         </div>
     </main>
 
-    <!-- Chart/Heatmap Configuration Modal -->
-    <div id="columnSelector" class="modal">
-        <div class="modal-content">
+    <!-- Parameter Selection Modal -->
+    <div id="parameterSelector" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h3>Chart Configuration</h3>
-                <button id="closeModal" class="btn-outline" style="border:none;">✕</button>
+                <h3>Select Parameters for Analysis</h3>
+                <button id="closeParamModal" class="btn-outline" style="border:none;">✕</button>
             </div>
-
             <div class="modal-body">
-                <div class="form-group">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label class="form-label" style="margin-bottom: 0;">Select File</label>
-                        <label
-                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
-                            <input type="checkbox" id="showGlobalColumns">
-                            <span>Show columns from all files</span>
-                        </label>
-                    </div>
-                    <select id="fileSelect" class="form-select" aria-label="Select File" title="Select File">
-                        <option value="">Select a file...</option>
-                    </select>
-                </div>
-
-                <div class="column-grid">
-                    <div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-                            <label class="form-label">X-Axis (Time/Independent)</label>
-                        </div>
-                        <input type="text" id="xSearch" class="form-input" placeholder="Search..."
-                            aria-label="Search X-Axis Columns" title="Search X-Axis Columns"
-                            style="margin-bottom:0.5rem;">
-                        <div id="xSelect" class="column-list"></div>
-                    </div>
-
-                    <div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-                            <label class="form-label">Y-Axis (Values)</label>
-                        </div>
-                        <input type="text" id="ySearch" class="form-input" placeholder="Search..."
-                            aria-label="Search Y-Axis Columns" title="Search Y-Axis Columns"
-                            style="margin-bottom:0.5rem;">
-                        <div id="ySelect" class="column-list"></div>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button id="clearSelection" class="btn-outline">Clear</button>
-                    <div style="display: flex; gap: 0.5rem; margin-left: auto;">
-                        <button id="skipSelection" class="btn-outline">Skip</button>
-                        <button id="moveSelected" class="btn-primary">Move with Selected</button>
-                    </div>
-                </div>
+                <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                    Select specific columns to perform analysis on. Common names are merged.
+                </p>
+                <input type="text" id="paramSearch" class="form-input" placeholder="Search parameters..."
+                    style="margin-bottom: 1rem;">
+                <div id="paramList" class="column-list" style="height: 300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="skipParamSelection" class="btn-outline">Skip</button>
+                <button id="nextToChartType" class="btn-primary">Next</button>
             </div>
         </div>
     </div>
@@ -222,6 +187,69 @@
                         <div class="chart-type-name">Pie Chart</div>
                         <div class="chart-type-desc">Part-to-whole</div>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart/Heatmap Configuration Modal -->
+    <div id="columnSelector" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Axis Configuration</h3>
+                <button id="closeModal" class="btn-outline" style="border:none;">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label class="form-label" style="margin-bottom: 0;">Select File</label>
+                        <div style="display: flex; gap: 1rem;">
+                            <label
+                                style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                                <input type="checkbox" id="showOnlySelectedParams" checked>
+                                <span>Selected parameters only</span>
+                            </label>
+                            <label
+                                style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                                <input type="checkbox" id="showGlobalColumns">
+                                <span>Show columns from all files</span>
+                            </label>
+                        </div>
+                    </div>
+                    <select id="fileSelect" class="form-select" aria-label="Select File" title="Select File">
+                        <option value="">Select a file...</option>
+                    </select>
+                </div>
+
+                <div class="column-grid">
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                            <label class="form-label">X-Axis (Time/Independent)</label>
+                        </div>
+                        <input type="text" id="xSearch" class="form-input" placeholder="Search..."
+                            aria-label="Search X-Axis Columns" title="Search X-Axis Columns"
+                            style="margin-bottom:0.5rem;">
+                        <div id="xSelect" class="column-list"></div>
+                    </div>
+
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                            <label class="form-label">Y-Axis (Values)</label>
+                        </div>
+                        <input type="text" id="ySearch" class="form-input" placeholder="Search..."
+                            aria-label="Search Y-Axis Columns" title="Search Y-Axis Columns"
+                            style="margin-bottom:0.5rem;">
+                        <div id="ySelect" class="column-list"></div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="clearSelection" class="btn-outline">Clear</button>
+                    <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+                        <button id="generateChartBtn" class="btn-primary">Generate Chart</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -357,6 +385,7 @@
     <script src="/static/extraction.js?v=12"></script>
     <script src="/static/comparison.js?v=12"></script>
     <script src="/static/column-search.js?v=12"></script>
+    <script src="/static/signal-selector.js?v=1"></script>
 
 </body>
 

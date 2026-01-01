@@ -47,7 +47,7 @@ from backend.observability.metrics import metrics, time_execution
 from backend.observability.tracing import trace_span, tracer
 
 # API imports
-from backend.api import agent_endpoints, health_endpoints
+from backend.api import agent_endpoints, health_endpoints, signal_endpoints
 
 
 
@@ -177,8 +177,10 @@ app = FastAPI(title="ThermoSense AI", lifespan=lifespan)
 # Include routers
 try:
     from backend.api.task_endpoints import router as task_router
+    from backend.api import signal_endpoints
     app.include_router(task_router)
     app.include_router(agent_endpoints.router)
+    app.include_router(signal_endpoints.router)
     app.include_router(health_endpoints.router)
     app.include_router(health_endpoints.health_router)
     logger.info("API routers mounted successfully")
@@ -402,12 +404,12 @@ async def upload_file(
                     data_preview=data_preview
                 )
                 
-                # Trigger background analysis for data files
-                background_tasks.add_task(run_proactive_analysis, session_id, file.filename, file_path)
+                # Trigger background analysis for data files (Disabled as per user request)
+                # background_tasks.add_task(run_proactive_analysis, session_id, file.filename, file_path)
 
             elif file.filename.lower().endswith(('.pptx', '.ppt')):
-                slide_count = ppt_extractor.get_slide_count(str(file_path))
                 slide_info = ppt_extractor.get_slide_info(str(file_path))
+                slide_count = len(slide_info)
                 logger.info(f"PPTX uploaded: {slide_count} slides")
                 return JSONResponse({
                     "success": True,
@@ -802,6 +804,12 @@ async def smart_extraction(req: ExtractionRequest):
         if not valid_paths:
             return JSONResponse({"success": False, "error": "No valid files found"}, status_code=404)
             
+        # PPTX Extraction Logic
+        ppt_files = [f for f in valid_paths if f.lower().endswith('.pptx')]
+        extracted_slides_info = []
+        ppt_summary = ""
+        ppt_note = None
+
         # Robust sensor parsing (handle strings with newlines/commas just in case)
         if isinstance(required_sensors, str):
             required_sensors = [s.strip() for s in re.split(r'[,\n\r]+', required_sensors) if s.strip()]
@@ -841,31 +849,29 @@ async def smart_extraction(req: ExtractionRequest):
             
         required_sensors = filtered_sensors
 
-        if not required_sensors:
+        # Only return 400 if NO sensors AND NO PPT files
+        if not required_sensors and not ppt_files:
             error_msg = "No valid sensors provided."
             if noise_detected:
                 error_msg += " Input contained log data instead of sensor names."
             return JSONResponse({"success": False, "error": error_msg}, status_code=400)
-
-        # PPTX Extraction Logic
-        ppt_files = [f for f in valid_paths if f.lower().endswith('.pptx')]
-        extracted_slides_info = []
-        ppt_summary = ""
-        ppt_note = None
         
         if ppt_files:
             logger.info(f"Processing PPTX extraction for {len(ppt_files)} files")
             
-            # Parse slide numbers from required_sensors (which acts as slide range for PPT)
+            # IMPROVED: Parse slide numbers from required_sensors (which acts as slide range for PPT)
             slide_numbers = []
             for s in required_sensors:
                 try:
-                    if '-' in s:
-                        start, end = map(int, s.split('-'))
-                        slide_numbers.extend(range(start, end + 1))
-                    else:
-                        slide_numbers.append(int(s))
-                except ValueError:
+                    s_clean = str(s).strip()
+                    if '-' in s_clean:
+                        parts = s_clean.split('-')
+                        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                            start, end = map(int, parts)
+                            slide_numbers.extend(range(start, end + 1))
+                    elif s_clean.isdigit():
+                        slide_numbers.append(int(s_clean))
+                except (ValueError, TypeError):
                     continue
             
             # IMPROVED: Default to all slides (or first 20) if no valid numbers found
@@ -906,9 +912,11 @@ async def smart_extraction(req: ExtractionRequest):
                 ppt_summary = "PPTX extraction attempted but no slides were found or extracted."
 
         # Run Sensor Extraction (for CSV/Excel)
-        # We continue even if PPTX was processed
+        # Filter out PPTX files as they are handled separately
+        data_files = [f for f in valid_paths if not f.lower().endswith(('.pptx', '.ppt'))]
+        
         results, source_map = sensor_harvester.harvest_sensors(
-            valid_paths, 
+            data_files, 
             required_sensors, 
             strict_mode=strict_mode, 
             structured_output=structured_mode, 
@@ -927,7 +935,7 @@ async def smart_extraction(req: ExtractionRequest):
                 # FIX: Pass structured data instead of markdown
                 table_content = {
                     "columns": results.columns.tolist(),
-                    "data": results.head(20).to_dict(orient='records')
+                    "data": results.head(50).to_dict(orient='records')
                 }
                 storage.add_to_report_section(session_id, target_section, "table", table_content)
             elif isinstance(results, dict):
@@ -937,7 +945,7 @@ async def smart_extraction(req: ExtractionRequest):
                         # FIX: Pass structured data instead of markdown
                         table_content = {
                             "columns": df.columns.tolist(),
-                            "data": df.head(20).to_dict(orient='records')
+                            "data": df.head(50).to_dict(orient='records')
                         }
                         storage.add_to_report_section(session_id, target_section, "table", table_content)
         
@@ -947,23 +955,15 @@ async def smart_extraction(req: ExtractionRequest):
         elif isinstance(results, dict):
             is_empty = not results
             
-        # Consolidated Response
-        if extracted_slides_info or not is_empty:
-            final_summary = ppt_summary
-            if not is_empty:
-                excel_summary = f"Extracted data for {len(required_sensors)} sensors."
-                final_summary = f"{ppt_summary} {excel_summary}".strip()
-            
-            return JSONResponse({
-                "success": True,
-                "summary": final_summary,
-                "extracted_slides": extracted_slides_info,
-                "note": ppt_note
-            })
+            # We don't return early here anymore to allow download_url generation
+            # but we store the PPT summary to include in the final response
+            pass
             
         if is_empty and not extracted_slides_info:
             missing = [s for s, src in source_map.items() if src == "NOT FOUND"]
             error_msg = "No data could be extracted."
+            if ppt_files:
+                error_msg += " PPT extraction failed (check if PowerPoint is installed)."
             if missing:
                 error_msg += f" Sensors not found: {', '.join(missing[:5])}"
             return JSONResponse({"success": False, "error": error_msg}, status_code=400)
@@ -971,7 +971,7 @@ async def smart_extraction(req: ExtractionRequest):
         # Save to file
         timestamp = datetime.now().strftime('%H%M%S')
         
-        if structured_mode and isinstance(results, dict):
+        if structured_mode and isinstance(results, dict) and results:
             output_filename = f"Extracted_Structured_{timestamp}.xlsx"
             output_path = session_dir / output_filename
             
@@ -985,6 +985,13 @@ async def smart_extraction(req: ExtractionRequest):
             master_df = results[first_sheet_name]
             row_count = sum(len(df) for df in results.values())
             summary = f"Extracted {row_count} rows across {len(results)} sheets from {len(valid_paths)} files."
+        elif not isinstance(results, dict) or not results:
+            # Handle case where results is empty but we have slides
+            master_df = pd.DataFrame()
+            output_filename = f"Extracted_Empty_{timestamp}.csv"
+            output_path = session_dir / output_filename
+            master_df.to_csv(output_path, index=False)
+            summary = "No Excel data extracted."
         else:
             master_df = results
             output_filename = f"Extracted_Flat_{timestamp}.csv"
@@ -998,13 +1005,20 @@ async def smart_extraction(req: ExtractionRequest):
         # Replace NaNs for JSON
         preview_data = master_df.head().replace({np.nan: None}).to_dict(orient='records')
             
+        # Combine summaries
+        final_summary = summary
+        if ppt_summary:
+            final_summary = f"{ppt_summary} {summary}".strip()
+
         return JSONResponse({
             "success": True,
             "download_url": download_url,
             "extracted_file": output_filename,
-            "summary": summary,
+            "summary": final_summary,
             "preview": preview_data,
-            "sensors_found": [s for s, src in source_map.items() if src != "NOT FOUND"]
+            "sensors_found": [s for s, src in source_map.items() if src != "NOT FOUND"],
+            "extracted_slides": extracted_slides_info,
+            "note": ppt_note
         })
             
     except Exception as e:
@@ -1875,6 +1889,18 @@ async def intelligent_chat(req: ChatRequest):
                     
                     # Append the inference question if a chart was generated
                     final_response = agent_resp.response
+                    
+                    # Check for report artifact
+                    report_url = None
+                    download_ready = False
+                    for artifact in agent_resp.artifacts:
+                        if artifact.get('type') == 'report':
+                            report_path = artifact.get('path')
+                            if report_path:
+                                report_url = f"/workspace/{session_id}/{Path(report_path).name}"
+                                download_ready = True
+                                break
+
                     if any(a.get('type') == 'chart' for a in agent_resp.artifacts):
                         final_response += "\n\n**Do you want to add your inference or any observation about this data?**"
                     
@@ -1882,7 +1908,9 @@ async def intelligent_chat(req: ChatRequest):
                         "success": agent_resp.success,
                         "response": final_response,
                         "plan": agent_resp.plan,
-                        "artifacts": agent_resp.artifacts
+                        "artifacts": agent_resp.artifacts,
+                        "download_ready": download_ready,
+                        "report_url": report_url
                     })
 
                 elif response_data.get('type') == 'action':
@@ -2135,8 +2163,8 @@ async def add_to_report(req: ReportAddRequest):
 class ChartAddRequest(BaseModel):
     session_id: str
     chart_id: str
-    chart_path: str
-    description: str
+    chart_path: Optional[str] = None
+    description: Optional[str] = None
     section: str = "Analysis and Results"  # Default section
 
 @app.get("/api/download/{filename}")

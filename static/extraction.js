@@ -214,7 +214,13 @@
 
                 if (data.success) {
                     if (window.showToast) window.showToast('Extraction complete!', 'success');
-                    if (window.addMessage) window.addMessage(data.message || 'Data extracted and added to report.', 'bot');
+
+                    let messageText = data.message || data.summary || 'Data extracted and added to report.';
+                    if (data.download_url) {
+                        messageText += `\n\n[Download Extracted Data](${data.download_url})`;
+                    }
+
+                    if (window.addMessage) window.addMessage(messageText, 'bot');
                     extractionModal.style.display = 'none';
                 } else {
                     if (window.showToast) window.showToast('Extraction failed: ' + data.error, 'error');
