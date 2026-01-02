@@ -108,3 +108,7 @@ ThermoSense goes beyond simple Q&A. It acts as an autonomous agent that can:
 ## Contributing
 
 We welcome contributions to improve ThermoSense. Please fork the repository and submit a pull request with your changes.
+
+---
+
+Feel free to reach out, I'll explain.

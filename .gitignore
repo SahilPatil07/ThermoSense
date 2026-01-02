@@ -31,9 +31,11 @@ Thumbs.db
 htmlcov/
 
 # Project Specific
+backend/
 workspace/
 chroma_db/
 rag_cache.pkl
 *.log
 .env
 assets/
+.ssh/
