@@ -4,7 +4,6 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 ThermoSense is an advanced AI platform designed to streamline the workflow of thermal engineers. By integrating Large Language Models (LLMs) with a specialized tool ecosystem, it automates data extraction, analysis, visualization, and reporting.
 
